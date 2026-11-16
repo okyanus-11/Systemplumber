@@ -113,6 +113,7 @@ fn main() {
     let mutates_host_root = matches!(
         &cli.command,
         Some(Commands::Install { .. })
+            | Some(Commands::Sync)
             | Some(Commands::Bootstrap {
                 command: Some(BootstrapCommand::Config { default: true, .. })
             })
