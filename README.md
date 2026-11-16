@@ -52,4 +52,4 @@ need dedicated implementations and tests before those commands can be used.
 
 ## Installation
 
-For prerequisites, environment setup, configuration, and run/build commands, see the [installation guide](INSTALLATION.md).
+Requires Rust 1.85+ and Cargo; Linux is the intended development environment. Clone the repository, run `cargo build --release` and `cargo test`, then use `target/release/flush` or install locally with `cargo install --path .`. This remains an early-stage project, not a production package manager. See the [full installation guide](INSTALLATION.md).
