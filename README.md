@@ -49,3 +49,7 @@ cargo test
 This repository is a work in progress. Package removal, full upgrade planning,
 adoption from other package managers, and declarative system reconciliation
 need dedicated implementations and tests before those commands can be used.
+
+## Installation
+
+For prerequisites, environment setup, configuration, and run/build commands, see the [installation guide](INSTALLATION.md).
