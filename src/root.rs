@@ -46,6 +46,59 @@ impl Root {
         self.path.join(relative)
     }
 
+    /// Resolve an archive destination while rejecting symlinked ancestors
+    /// that would redirect writes outside the configured target root.
+    pub fn checked_join(&self, path: impl AsRef<Path>) -> anyhow::Result<PathBuf> {
+        let destination = self.join(path);
+        let canonical_root = std::fs::canonicalize(&self.path).map_err(|error| {
+            anyhow::anyhow!(
+                "target root {} must exist before resolving archive paths: {}",
+                self.path.display(),
+                error
+            )
+        })?;
+
+        if destination == self.path {
+            return Ok(destination);
+        }
+
+        let mut ancestor = destination
+            .parent()
+            .ok_or_else(|| anyhow::anyhow!("archive destination has no parent"))?;
+        let mut missing = Vec::new();
+
+        while !ancestor.exists() {
+            let name = ancestor.file_name().ok_or_else(|| {
+                anyhow::anyhow!("could not resolve archive destination parent")
+            })?;
+            missing.push(name.to_os_string());
+            ancestor = ancestor.parent().ok_or_else(|| {
+                anyhow::anyhow!("archive destination is outside the target root")
+            })?;
+        }
+
+        let canonical_ancestor = std::fs::canonicalize(ancestor)?;
+        if !canonical_ancestor.starts_with(&canonical_root) {
+            anyhow::bail!(
+                "refusing archive destination through a symlink outside target root: {}",
+                destination.display()
+            );
+        }
+
+        let mut resolved_parent = canonical_ancestor;
+        for component in missing.iter().rev() {
+            resolved_parent.push(component);
+        }
+        if !resolved_parent.starts_with(&canonical_root) {
+            anyhow::bail!(
+                "refusing archive destination outside target root: {}",
+                destination.display()
+            );
+        }
+
+        Ok(destination)
+    }
+
     pub fn etc(&self) -> PathBuf {
         self.join("/etc")
     }
