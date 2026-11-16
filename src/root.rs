@@ -160,3 +160,50 @@ mod tests {
         assert_eq!(root.join("/"), PathBuf::from("/tmp/systemplumber-root"));
     }
 }
+
+
+#[cfg(all(test, unix))]
+mod symlink_tests {
+    use super::Root;
+    use std::fs;
+    use std::os::unix::fs::symlink;
+    use std::path::PathBuf;
+    use std::sync::atomic::{AtomicU64, Ordering};
+
+    static NEXT: AtomicU64 = AtomicU64::new(0);
+
+    fn temp_root() -> (PathBuf, PathBuf) {
+        let id = NEXT.fetch_add(1, Ordering::Relaxed);
+        let base = std::env::temp_dir().join(format!(
+            "systemplumber-root-check-{}-{id}",
+            std::process::id()
+        ));
+        let root = base.join("root");
+        let outside = base.join("outside");
+        fs::create_dir_all(&root).unwrap();
+        fs::create_dir_all(&outside).unwrap();
+        (base, root)
+    }
+
+    #[test]
+    fn checked_join_rejects_symlinked_parent_outside_root() {
+        let (base, root_path) = temp_root();
+        let outside = base.join("outside");
+        symlink(&outside, root_path.join("escape")).unwrap();
+
+        let root = Root::new(&root_path);
+        assert!(root.checked_join("escape/payload").is_err());
+        fs::remove_dir_all(base).unwrap();
+    }
+
+    #[test]
+    fn checked_join_rejects_broken_symlink_ancestors() {
+        let (base, root_path) = temp_root();
+        let outside_missing = base.join("outside").join("not-created");
+        symlink(&outside_missing, root_path.join("broken")).unwrap();
+
+        let root = Root::new(&root_path);
+        assert!(root.checked_join("broken/payload").is_err());
+        fs::remove_dir_all(base).unwrap();
+    }
+}
