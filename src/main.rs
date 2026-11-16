@@ -94,6 +94,11 @@ enum BootstrapCommand {
     },
 }
 
+fn unavailable_command(name: &str) -> ! {
+    eprintln!("ERROR: command '{}' is not implemented yet; no system changes were made.", name);
+    std::process::exit(2);
+}
+
 fn main() {
     let cli = Cli::parse();
 
@@ -219,16 +224,9 @@ fn main() {
                 }
             }
         }
-        Some(Commands::Remove { packages }) => {
-            println!("remove");
-            println!("root: {}", root.path().display());
-            println!("packages: {:?}", packages);
-        }
+        Some(Commands::Remove { .. }) => unavailable_command("remove"),
 
-        Some(Commands::Update) => {
-            println!("update");
-            println!("root: {}", root.path().display());
-        }
+        Some(Commands::Update) => unavailable_command("update"),
         Some(Commands::Search { query }) => {
             let database_path = root.package_db().join("packages.db");
 
@@ -293,15 +291,9 @@ fn main() {
             }
         }
 
-        Some(Commands::Adopt) => {
-            println!("adopt");
-            println!("root: {}", root.path().display());
-        }
+        Some(Commands::Adopt) => unavailable_command("adopt"),
 
-        Some(Commands::Forge) => {
-            println!("forge");
-            println!("root: {}", root.path().display());
-        }
+        Some(Commands::Forge) => unavailable_command("forge"),
         Some(Commands::Sync) => {
             let sync = Sync::new(root);
 
