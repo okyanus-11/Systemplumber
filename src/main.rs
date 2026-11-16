@@ -95,7 +95,10 @@ enum BootstrapCommand {
 }
 
 fn unavailable_command(name: &str) -> ! {
-    eprintln!("ERROR: command '{}' is not implemented yet; no system changes were made.", name);
+    eprintln!(
+        "ERROR: command '{}' is not implemented yet; no system changes were made.",
+        name
+    );
     std::process::exit(2);
 }
 
