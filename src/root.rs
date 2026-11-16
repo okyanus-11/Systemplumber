@@ -67,7 +67,10 @@ impl Root {
             .ok_or_else(|| anyhow::anyhow!("archive destination has no parent"))?;
         let mut missing = Vec::new();
 
-        while !ancestor.exists() {
+        while let Err(error) = std::fs::symlink_metadata(ancestor) {
+            if error.kind() != std::io::ErrorKind::NotFound {
+                return Err(error.into());
+            }
             let name = ancestor.file_name().ok_or_else(|| {
                 anyhow::anyhow!("could not resolve archive destination parent")
             })?;
