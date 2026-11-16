@@ -126,16 +126,27 @@ fn validate_symlink_target(root: &Root, link_path: &Path, target: &Path) -> anyh
         .unwrap_or_else(|| Path::new(""))
         .join(target);
     let target_path = root.checked_join(&target_relative)?;
-    if target_path.exists() {
-        let canonical_root = std::fs::canonicalize(root.path())?;
-        let canonical_target = std::fs::canonicalize(&target_path)?;
-        if !canonical_target.starts_with(&canonical_root) {
-            anyhow::bail!(
-                "refusing symlink target outside target root: {} -> {}",
-                link_path.display(),
-                target.display()
-            );
+    match std::fs::symlink_metadata(&target_path) {
+        Ok(_) => {
+            let canonical_root = std::fs::canonicalize(root.path())?;
+            let canonical_target = std::fs::canonicalize(&target_path).map_err(|error| {
+                anyhow::anyhow!(
+                    "refusing unresolved symlink target {} -> {}: {}",
+                    link_path.display(),
+                    target.display(),
+                    error
+                )
+            })?;
+            if !canonical_target.starts_with(&canonical_root) {
+                anyhow::bail!(
+                    "refusing symlink target outside target root: {} -> {}",
+                    link_path.display(),
+                    target.display()
+                );
+            }
         }
+        Err(error) if error.kind() == std::io::ErrorKind::NotFound => {}
+        Err(error) => return Err(error.into()),
     }
 
     Ok(())
