@@ -1,8 +1,12 @@
 use std::process::Command;
+use std::sync::atomic::{AtomicU64, Ordering};
+
+static NEXT_TEST_ROOT: AtomicU64 = AtomicU64::new(0);
 
 fn run_placeholder(command: &str, args: &[&str]) {
+    let unique = NEXT_TEST_ROOT.fetch_add(1, Ordering::Relaxed);
     let root = std::env::temp_dir().join(format!(
-        "systemplumber-placeholder-test-{}",
+        "systemplumber-placeholder-test-{}-{unique}",
         std::process::id()
     ));
     std::fs::create_dir_all(&root).expect("create temporary root");
