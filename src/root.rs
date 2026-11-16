@@ -1,4 +1,4 @@
-use std::path::{Path, PathBuf};
+use std::path::{Component, Path, PathBuf};
 
 #[derive(Debug, Clone)]
 pub struct Root {
@@ -24,14 +24,26 @@ impl Root {
         &self.path
     }
 
+    /// Join a path beneath this root without allowing lexical parent traversal.
+    ///
+    /// RootDir and platform prefixes are ignored so paths such as /etc are
+    /// interpreted relative to the selected target root. ParentDir components
+    /// may only remove components added by this call; they can never pop the
+    /// configured root itself.
     pub fn join(&self, path: impl AsRef<Path>) -> PathBuf {
-        let path = path.as_ref();
+        let mut relative = PathBuf::new();
 
-        if path == Path::new("/") {
-            return self.path.clone();
+        for component in path.as_ref().components() {
+            match component {
+                Component::Normal(part) => relative.push(part),
+                Component::ParentDir => {
+                    relative.pop();
+                }
+                Component::CurDir | Component::RootDir | Component::Prefix(_) => {}
+            }
         }
 
-        self.path.join(path.strip_prefix("/").unwrap_or(path))
+        self.path.join(relative)
     }
 
     pub fn etc(&self) -> PathBuf {
