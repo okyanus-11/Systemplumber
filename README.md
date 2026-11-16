@@ -15,8 +15,11 @@ installing packages against a selected filesystem root. The executable is named
 - `flush install PACKAGE...` — invoke the current package installer.
 
 Use `flush --help` and `flush COMMAND --help` for the current CLI syntax.
-The `--root PATH` option selects a target filesystem root; review the target
-carefully before running any operation that changes it.
+The `--root PATH` option selects a target filesystem root; lexical parent-path
+traversal is constrained beneath that root. Operations that modify the host
+root filesystem (`/`) are refused unless you explicitly pass
+`--allow-host-root`. Prefer a disposable target root while this project is under
+development.
 
 ## Not implemented yet
 
