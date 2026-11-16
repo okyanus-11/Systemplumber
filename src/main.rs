@@ -34,6 +34,10 @@ struct Cli {
     #[arg(long, short = 'r', global = true)]
     root: Option<PathBuf>,
 
+    /// Explicitly allow operations that modify the host root filesystem (/).
+    #[arg(long, global = true)]
+    allow_host_root: bool,
+
     #[command(subcommand)]
     command: Option<Commands>,
 }
@@ -105,7 +109,26 @@ fn unavailable_command(name: &str) -> ! {
 fn main() {
     let cli = Cli::parse();
 
-    let root = cli.root.map(Root::new).unwrap_or_else(Root::host);
+    let root = cli.root.clone().map(Root::new).unwrap_or_else(Root::host);
+    let mutates_host_root = matches!(
+        &cli.command,
+        Some(Commands::Install { .. })
+            | Some(Commands::Bootstrap {
+                command: Some(BootstrapCommand::Config { default: true, .. })
+            })
+            | Some(Commands::Bootstrap {
+                command: Some(BootstrapCommand::Config { set: Some(_), .. })
+            })
+    );
+    if root.path() == std::path::Path::new("/")
+        && mutates_host_root
+        && !cli.allow_host_root
+    {
+        eprintln!(
+            "ERROR: refusing to modify the host filesystem by default.              Select a target with --root PATH, or explicitly pass --allow-host-root."
+        );
+        std::process::exit(2);
+    }
 
     match cli.command {
         Some(Commands::Bootstrap { command }) => match command {
