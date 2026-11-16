@@ -74,6 +74,73 @@ impl ArchBackend {
     }
 }
 
+fn reject_symlink_destination(path: &Path) -> anyhow::Result<()> {
+    match std::fs::symlink_metadata(path) {
+        Ok(metadata) if metadata.file_type().is_symlink() => {
+            anyhow::bail!(
+                "refusing to write through existing symlink destination: {}",
+                path.display()
+            );
+        }
+        Ok(_) => Ok(()),
+        Err(error) if error.kind() == std::io::ErrorKind::NotFound => Ok(()),
+        Err(error) => Err(error.into()),
+    }
+}
+
+fn validate_symlink_target(root: &Root, link_path: &Path, target: &Path) -> anyhow::Result<()> {
+    use std::path::Component;
+
+    if target.is_absolute() {
+        anyhow::bail!(
+            "refusing absolute symlink target {} for {}",
+            target.display(),
+            link_path.display()
+        );
+    }
+
+    let mut depth = link_path
+        .parent()
+        .unwrap_or_else(|| Path::new(""))
+        .components()
+        .filter(|component| matches!(component, Component::Normal(_)))
+        .count();
+
+    for component in target.components() {
+        match component {
+            Component::Normal(_) => depth += 1,
+            Component::ParentDir if depth > 0 => depth -= 1,
+            Component::ParentDir | Component::RootDir | Component::Prefix(_) => {
+                anyhow::bail!(
+                    "refusing symlink target that escapes target root: {} -> {}",
+                    link_path.display(),
+                    target.display()
+                );
+            }
+            Component::CurDir => {}
+        }
+    }
+
+    let target_relative = link_path
+        .parent()
+        .unwrap_or_else(|| Path::new(""))
+        .join(target);
+    let target_path = root.checked_join(&target_relative)?;
+    if target_path.exists() {
+        let canonical_root = std::fs::canonicalize(root.path())?;
+        let canonical_target = std::fs::canonicalize(&target_path)?;
+        if !canonical_target.starts_with(&canonical_root) {
+            anyhow::bail!(
+                "refusing symlink target outside target root: {} -> {}",
+                link_path.display(),
+                target.display()
+            );
+        }
+    }
+
+    Ok(())
+}
+
 fn verify_sha256(data: &[u8], expected: &str) -> anyhow::Result<()> {
     let mut hasher = Sha256::new();
     hasher.update(data);
@@ -122,14 +189,16 @@ fn extract_package(root: &Root, data: &[u8]) -> anyhow::Result<()> {
 
         validate_archive_path(&path)?;
 
-        let destination = root.join(&path);
+        let destination = root.checked_join(&path)?;
 
         match entry.header().entry_type() {
             EntryType::Directory => {
+                reject_symlink_destination(&destination)?;
                 fs::create_dir_all(&destination)?;
             }
 
             EntryType::Regular => {
+                reject_symlink_destination(&destination)?;
                 if let Some(parent) = destination.parent() {
                     fs::create_dir_all(parent)?;
                 }
@@ -154,6 +223,7 @@ fn extract_package(root: &Root, data: &[u8]) -> anyhow::Result<()> {
                         path.display()
                     )
                 })?;
+                validate_symlink_target(root, &path, &target)?;
 
                 if let Some(parent) = destination.parent() {
                     fs::create_dir_all(parent)?;
@@ -233,8 +303,10 @@ fn extract_package(root: &Root, data: &[u8]) -> anyhow::Result<()> {
         let mut created_any = false;
 
         for (path, target) in hard_links {
-            let destination = root.join(&path);
-            let target_path = root.join(&target);
+            let destination = root.checked_join(&path)?;
+            let target_path = root.checked_join(&target)?;
+            reject_symlink_destination(&destination)?;
+            reject_symlink_destination(&target_path)?;
 
             if let Some(parent) = destination.parent() {
                 fs::create_dir_all(parent)?;
